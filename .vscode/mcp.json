@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "dotsight": {
+      "type": "stdio",
+      "command": "dotsight",
+      "args": [
+        "--solution",
+        "${workspaceFolder}/DotSight.sln"
+      ]
+    }
+  }
+}
