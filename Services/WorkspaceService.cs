@@ -36,8 +36,8 @@ public sealed class WorkspaceService : IDisposable
             _workspace?.Dispose();
             _logger.LogInformation("Opening solution: {Path}", _options.SolutionPath);
             _workspace = MSBuildWorkspace.Create();
-            _workspace.WorkspaceFailed += (_, e) =>
-                _logger.LogWarning("Workspace warning: {Message}", e.Diagnostic.Message);
+            _workspace.RegisterWorkspaceFailedHandler(e =>
+                _logger.LogWarning("Workspace warning: {Message}", e.Diagnostic.Message));
 
             _solution = await _workspace.OpenSolutionAsync(_options.SolutionPath, cancellationToken: ct);
             _loadedAt = DateTime.UtcNow;

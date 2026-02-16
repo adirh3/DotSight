@@ -11,8 +11,14 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>dotsight</ToolCommandName>
     <PackageId>DotSight</PackageId>
-    <Version>0.1.0</Version>
-    <Description>MCP server for C# solution intelligence — symbols, references, diagnostics, project graph</Description>
+    <Version>0.1.0-preview.1</Version>
+    <Description>MCP server for C# solution intelligence — symbols, references, diagnostics, project graph, and NuGet package inspection. Built with Roslyn.</Description>
+    <Authors>adirh3</Authors>
+    <PackageProjectUrl>https://github.com/adirh3/DotSight</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/adirh3/DotSight</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>mcp;roslyn;csharp;dotnet;ai;copilot;code-intelligence</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +27,10 @@
     <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.0.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.0.0" />
     <PackageReference Include="Microsoft.Build.Locator" Version="1.7.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
 </Project>
