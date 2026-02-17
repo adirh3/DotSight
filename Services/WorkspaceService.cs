@@ -1,4 +1,7 @@
+using System.Reflection;
+using System.Runtime.InteropServices;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
@@ -16,6 +19,7 @@ public sealed class WorkspaceService : IDisposable
     private string? _resolvedSolutionPath;
     private DateTime _loadedAt;
     private McpServer? _server;
+    private string? _shadowCopyDir;
 
     public WorkspaceService(WorkspaceOptions options, ILogger<WorkspaceService> logger)
     {
@@ -105,6 +109,7 @@ public sealed class WorkspaceService : IDisposable
         }
 
         _loadedAt = DateTime.UtcNow;
+        _solution = ShadowCopyAnalyzerReferences(_solution);
         _logger.LogInformation("Loaded: {Count} projects", _solution.ProjectIds.Count);
     }
 
@@ -215,6 +220,133 @@ public sealed class WorkspaceService : IDisposable
     public void Dispose()
     {
         _workspace?.Dispose();
+        CleanupShadowDir();
+    }
+
+    /// <summary>
+    /// Replaces analyzer/generator references with non-locking versions so that
+    /// DotSight never holds file locks on DLLs in project bin/obj directories.
+    /// On Windows: shadow-copies DLLs that are in writable locations (bin/obj).
+    /// On Linux/macOS: uses LoadFromStream which doesn't lock files at all.
+    /// DLLs in read-only locations (NuGet cache, dotnet runtime) are loaded directly
+    /// since they're never overwritten by builds.
+    /// </summary>
+    private Solution ShadowCopyAnalyzerReferences(Solution solution)
+    {
+        CleanupShadowDir();
+
+        IAnalyzerAssemblyLoader loader;
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            _shadowCopyDir = Path.Combine(Path.GetTempPath(), "dotsight", "shadow", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_shadowCopyDir);
+            loader = new ShadowCopyAnalyzerLoader(_shadowCopyDir);
+        }
+        else
+        {
+            loader = new StreamAnalyzerLoader();
+        }
+
+        foreach (var project in solution.Projects)
+        {
+            if (!project.AnalyzerReferences.Any(r => r is AnalyzerFileReference))
+                continue;
+
+            var newRefs = project.AnalyzerReferences
+                .Select(r => r is AnalyzerFileReference afr
+                    ? (AnalyzerReference)new AnalyzerFileReference(afr.FullPath, loader)
+                    : r)
+                .ToList();
+            solution = solution.WithProjectAnalyzerReferences(project.Id, newRefs);
+        }
+
+        return solution;
+    }
+
+    private void CleanupShadowDir()
+    {
+        if (_shadowCopyDir is not null)
+        {
+            try { Directory.Delete(_shadowCopyDir, true); } catch { }
+            _shadowCopyDir = null;
+        }
+    }
+
+    /// <summary>
+    /// Determines whether a DLL path is in a read-only location (NuGet cache, dotnet runtime,
+    /// Program Files) where files are never overwritten by builds — no shadow copy needed.
+    /// </summary>
+    private static bool IsReadOnlyLocation(string fullPath)
+    {
+        var normalized = fullPath.Replace('\\', '/');
+
+        // NuGet package cache — packages are immutable once restored
+        if (normalized.Contains("/.nuget/packages/", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // .NET SDK/runtime directories — never modified by user builds
+        var dotnetRoot = Path.GetDirectoryName(RuntimeEnvironment.GetRuntimeDirectory())?.Replace('\\', '/');
+        if (dotnetRoot is not null && normalized.StartsWith(dotnetRoot, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Program Files on Windows
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles).Replace('\\', '/');
+            var pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86).Replace('\\', '/');
+            if ((!string.IsNullOrEmpty(pf) && normalized.StartsWith(pf, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(pf86) && normalized.StartsWith(pf86, StringComparison.OrdinalIgnoreCase)))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Windows: shadow-copies writable DLLs to a temp directory, loads read-only ones directly.
+    /// </summary>
+    private sealed class ShadowCopyAnalyzerLoader : IAnalyzerAssemblyLoader
+    {
+        private readonly string _shadowDir;
+
+        public ShadowCopyAnalyzerLoader(string shadowDir) => _shadowDir = shadowDir;
+
+        public void AddDependencyLocation(string fullPath)
+        {
+            if (!File.Exists(fullPath) || IsReadOnlyLocation(fullPath))
+                return;
+
+            var dest = Path.Combine(_shadowDir, Path.GetFileName(fullPath));
+            if (!File.Exists(dest))
+                try { File.Copy(fullPath, dest); } catch { }
+        }
+
+        public Assembly LoadFromPath(string fullPath)
+        {
+            // Read-only locations: load directly — no locking concern
+            if (IsReadOnlyLocation(fullPath))
+                return Assembly.LoadFrom(fullPath);
+
+            // Writable locations (bin/obj): shadow copy first
+            var dest = Path.Combine(_shadowDir, Path.GetFileName(fullPath));
+            if (!File.Exists(dest))
+                File.Copy(fullPath, dest);
+            return Assembly.LoadFrom(dest);
+        }
+    }
+
+    /// <summary>
+    /// Non-Windows: loads assemblies from a stream so the file is never locked.
+    /// </summary>
+    private sealed class StreamAnalyzerLoader : IAnalyzerAssemblyLoader
+    {
+        public void AddDependencyLocation(string fullPath) { }
+
+        public Assembly LoadFromPath(string fullPath)
+        {
+            var bytes = File.ReadAllBytes(fullPath);
+            return Assembly.Load(bytes);
+        }
     }
 
     private async Task<string> DiscoverSolutionPathAsync(CancellationToken ct)

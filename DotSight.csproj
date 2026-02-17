@@ -11,7 +11,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>dotsight</ToolCommandName>
     <PackageId>DotSight</PackageId>
-    <Version>0.1.0-preview.3</Version>
+    <Version>0.1.0-preview.4</Version>
     <Description>MCP server for C# solution intelligence — symbols, references, diagnostics, project graph, and NuGet package inspection. Built with Roslyn.</Description>
     <Authors>adirh3</Authors>
     <PackageProjectUrl>https://github.com/adirh3/DotSight</PackageProjectUrl>
