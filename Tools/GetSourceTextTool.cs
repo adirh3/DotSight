@@ -21,36 +21,39 @@ public sealed class GetSourceTextTool
      Description("Read the source code of a symbol or a file region from the solution. Given a fully qualified symbol name, returns its complete source text including the body. Given a file path, returns the file contents (optionally scoped to a line range). Essential for reading implementation details beyond signatures.")]
     public static async Task<string> GetSourceText(
         WorkspaceService workspace,
+        McpServer server,
         [Description("Fully qualified symbol name (e.g., 'MyNamespace.MyClass' or 'MyNamespace.MyClass.MyMethod'). Mutually exclusive with 'file'.")] string? fullyQualifiedName = null,
         [Description("File path relative to the solution directory. Mutually exclusive with 'fullyQualifiedName'.")] string? file = null,
         [Description("Start line (1-based). Only used with 'file'. Default: 1.")] int startLine = 1,
         [Description("End line (1-based, inclusive). Only used with 'file'. Default: end of file. Max 200 lines per request.")] int? endLine = null,
         [Description("Project name to search in when using fullyQualifiedName. If omitted, searches all projects.")] string? project = null,
+        [Description("Solution or project file to load (e.g. 'MyApp.sln', 'MyApp.csproj'). If omitted, auto-detected.")] string? solution = null,
         CancellationToken ct = default)
     {
+        workspace.SetServer(server);
         if (string.IsNullOrEmpty(fullyQualifiedName) && string.IsNullOrEmpty(file))
             return "Provide either 'fullyQualifiedName' or 'file'.";
 
         if (!string.IsNullOrEmpty(fullyQualifiedName) && !string.IsNullOrEmpty(file))
             return "Provide either 'fullyQualifiedName' or 'file', not both.";
 
-        var solution = await workspace.GetSolutionAsync(ct);
-        var solutionDir = Path.GetDirectoryName(solution.FilePath) ?? "";
+        var sln = await workspace.GetSolutionAsync(solution, ct);
+        var solutionDir = Path.GetDirectoryName(sln.FilePath) ?? "";
 
         if (!string.IsNullOrEmpty(file))
-            return await GetSourceByFile(solution, solutionDir, file, startLine, endLine, ct);
+            return await GetSourceByFile(sln, solutionDir, file, startLine, endLine, ct);
 
-        return await GetSourceBySymbol(solution, solutionDir, fullyQualifiedName!, project, ct);
+        return await GetSourceBySymbol(sln, solutionDir, fullyQualifiedName!, project, ct);
     }
 
     private static async Task<string> GetSourceByFile(
-        Solution solution, string solutionDir, string file, int startLine, int? endLine, CancellationToken ct)
+        Solution sln, string solutionDir, string file, int startLine, int? endLine, CancellationToken ct)
     {
         var absolutePath = Path.GetFullPath(Path.Combine(solutionDir, file));
 
         // Find the document in the solution
         Document? document = null;
-        foreach (var proj in solution.Projects)
+        foreach (var proj in sln.Projects)
         {
             document = proj.Documents.FirstOrDefault(d =>
                 string.Equals(d.FilePath, absolutePath, StringComparison.OrdinalIgnoreCase));
@@ -105,11 +108,11 @@ public sealed class GetSourceTextTool
     }
 
     private static async Task<string> GetSourceBySymbol(
-        Solution solution, string solutionDir, string fullyQualifiedName, string? project, CancellationToken ct)
+        Solution sln, string solutionDir, string fullyQualifiedName, string? project, CancellationToken ct)
     {
         var projects = string.IsNullOrEmpty(project)
-            ? solution.Projects
-            : solution.Projects.Where(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
+            ? sln.Projects
+            : sln.Projects.Where(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
 
         foreach (var proj in projects)
         {

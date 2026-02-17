@@ -24,19 +24,22 @@ public sealed class InspectPackageTool
                  "Use this to understand an unfamiliar NuGet package before adding it to your project.")]
     public static async Task<string> InspectPackage(
         WorkspaceService workspace,
+        McpServer server,
         [Description("NuGet package name (e.g., 'MediatR', 'Polly', 'FluentValidation').")] string packageName,
         [Description("Optional package version. If omitted, uses the latest stable version.")] string? version = null,
         [Description("Filter types to a specific namespace prefix (e.g., 'MediatR' to skip internal namespaces).")] string? namespaceFilter = null,
         [Description("Filter by type kind: 'interface', 'class', 'struct', 'enum', 'delegate'. If omitted, returns all kinds.")] string? kindFilter = null,
         [Description("Maximum number of types to return. Default: 200.")] int maxTypes = 200,
+        [Description("Solution or project file to load (e.g. 'MyApp.sln', 'MyApp.csproj'). If omitted, auto-detected.")] string? solution = null,
         CancellationToken ct = default)
     {
+        workspace.SetServer(server);
         // Determine TFM from the current solution's first project
         var tfm = "net8.0"; // safe default
         try
         {
-            var solution = await workspace.GetSolutionAsync(ct);
-            var firstProject = solution.Projects.FirstOrDefault();
+            var sln = await workspace.GetSolutionAsync(solution, ct);
+            var firstProject = sln.Projects.FirstOrDefault();
             if (firstProject is not null)
             {
                 var parseOptions = firstProject.ParseOptions as CSharpParseOptions;

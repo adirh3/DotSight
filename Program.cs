@@ -13,8 +13,8 @@ var builder = Host.CreateApplicationBuilder(args);
 // MCP servers use stdio — redirect all logging to stderr
 builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
 
-// Parse --solution argument
-var solutionPath = GetSolutionPath(args);
+// Parse --solution argument (lazy: if not specified, discovered on first tool call)
+var solutionPath = GetExplicitSolutionPath(args);
 builder.Services.AddSingleton(new WorkspaceOptions(solutionPath));
 builder.Services.AddSingleton<WorkspaceService>();
 
@@ -46,27 +46,12 @@ builder.Services
 
 await builder.Build().RunAsync();
 
-static string GetSolutionPath(string[] args)
+static string? GetExplicitSolutionPath(string[] args)
 {
     for (int i = 0; i < args.Length - 1; i++)
     {
         if (args[i] is "--solution" or "-s")
             return Path.GetFullPath(args[i + 1]);
     }
-
-    // Try to find a .sln in the current directory or parent directories
-    var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
-    while (dir is not null)
-    {
-        var slnFiles = dir.GetFiles("*.sln");
-        if (slnFiles.Length == 1)
-            return slnFiles[0].FullName;
-        if (slnFiles.Length > 1)
-            throw new InvalidOperationException(
-                $"Multiple .sln files found in {dir.FullName}. Use --solution <path> to specify which one.");
-        dir = dir.Parent;
-    }
-
-    throw new InvalidOperationException(
-        "No solution found. Use --solution <path> or run from a directory containing a .sln file.");
+    return null;
 }

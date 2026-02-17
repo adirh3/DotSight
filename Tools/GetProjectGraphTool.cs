@@ -14,18 +14,21 @@ public sealed class GetProjectGraphTool
      Description("Get a complete overview of the codebase in a single call. Returns the project dependency graph with target frameworks, output types, package references, source file lists, and — with includeOutlines=true — a full code outline showing every type and its members across all files. Use this FIRST when you need to understand what a codebase does, before reading individual files.")]
     public static async Task<string> GetProjectGraph(
         WorkspaceService workspace,
+        McpServer server,
         [Description("Specific project name to get details for. If omitted, returns the entire solution graph.")] string? project = null,
         [Description("If true, include the full list of package references for each project. Default: true.")] bool includePackages = true,
         [Description("If true, include the list of source file paths for each project. Useful for understanding project layout. Default: false.")] bool includeFiles = false,
         [Description("If true, include a compact code outline per file showing types, methods, and properties. Gives a full architecture overview in a single call. Default: false.")] bool includeOutlines = false,
+        [Description("Solution or project file to load (e.g. 'MyApp.sln', 'MyApp.csproj'). Supports .sln, .slnx, and .csproj. If omitted, auto-detected. Required when the workspace contains multiple solutions.")] string? solution = null,
         CancellationToken ct = default)
     {
-        var solution = await workspace.GetSolutionAsync(ct);
-        var solutionDir = Path.GetDirectoryName(solution.FilePath) ?? "";
+        workspace.SetServer(server);
+        var sln = await workspace.GetSolutionAsync(solution, ct);
+        var solutionDir = Path.GetDirectoryName(sln.FilePath ?? sln.Projects.FirstOrDefault()?.FilePath) ?? "";
 
         var projects = string.IsNullOrEmpty(project)
-            ? solution.Projects.ToList()
-            : solution.Projects
+            ? sln.Projects.ToList()
+            : sln.Projects
                 .Where(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
@@ -62,7 +65,7 @@ public sealed class GetProjectGraphTool
             var projectRefs = proj.ProjectReferences
                 .Select(pr =>
                 {
-                    var refProject = solution.GetProject(pr.ProjectId);
+                    var refProject = sln.GetProject(pr.ProjectId);
                     return refProject?.Name;
                 })
                 .Where(n => n is not null)
@@ -127,7 +130,7 @@ public sealed class GetProjectGraphTool
         {
             foreach (var projRef in proj.ProjectReferences)
             {
-                var targetProject = solution.GetProject(projRef.ProjectId);
+                var targetProject = sln.GetProject(projRef.ProjectId);
                 if (targetProject is not null)
                 {
                     edges.Add(new { from = proj.Name, to = targetProject.Name });
@@ -137,8 +140,8 @@ public sealed class GetProjectGraphTool
 
         var result = new
         {
-            solutionPath = Path.GetFileName(solution.FilePath),
-            totalProjects = solution.Projects.Count(),
+            solutionPath = Path.GetFileName(sln.FilePath ?? sln.Projects.FirstOrDefault()?.FilePath),
+            totalProjects = sln.Projects.Count(),
             showingProjects = projectNodes.Count,
             projects = projectNodes,
             dependencyEdges = edges

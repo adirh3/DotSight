@@ -15,21 +15,24 @@ public sealed class GetDiagnosticsTool
      Description("Get compiler errors, warnings, and analyzer diagnostics for the solution, a specific project, or a specific file. Returns diagnostics with severity, message, location, and diagnostic ID.")]
     public static async Task<string> GetDiagnostics(
         WorkspaceService workspace,
+        McpServer server,
         [Description("Scope: 'solution' to get all diagnostics, or a project name to scope to one project.")] string? scope = null,
         [Description("File path (relative to solution) to filter diagnostics to a specific file.")] string? file = null,
         [Description("Minimum severity: 'error', 'warning', 'info', or 'hidden'. Default: 'warning'.")] string? minSeverity = "warning",
         [Description("Maximum number of diagnostics to return. Default: 100.")] int maxResults = 100,
+        [Description("Solution or project file to load (e.g. 'MyApp.sln', 'MyApp.csproj'). If omitted, auto-detected.")] string? solution = null,
         CancellationToken ct = default)
     {
-        var solution = await workspace.GetSolutionAsync(ct);
-        var solutionDir = Path.GetDirectoryName(solution.FilePath) ?? "";
+        workspace.SetServer(server);
+        var sln = await workspace.GetSolutionAsync(solution, ct);
+        var solutionDir = Path.GetDirectoryName(sln.FilePath) ?? "";
 
         var minSev = ParseSeverity(minSeverity);
         var results = new List<object>();
 
         var projects = string.IsNullOrEmpty(scope) || string.Equals(scope, "solution", StringComparison.OrdinalIgnoreCase)
-            ? solution.Projects
-            : solution.Projects.Where(p => string.Equals(p.Name, scope, StringComparison.OrdinalIgnoreCase));
+            ? sln.Projects
+            : sln.Projects.Where(p => string.Equals(p.Name, scope, StringComparison.OrdinalIgnoreCase));
 
         string? absoluteFilePath = null;
         if (!string.IsNullOrEmpty(file))

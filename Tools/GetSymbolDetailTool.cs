@@ -20,18 +20,21 @@ public sealed class GetSymbolDetailTool
      Description("Get detailed information about a specific symbol by its fully qualified name. Returns full signature, documentation, source location/spans, members (for types), base types, interfaces, and extension methods.")]
     public static async Task<string> GetSymbolDetail(
         WorkspaceService workspace,
+        McpServer server,
         [Description("Fully qualified name of the symbol (e.g., 'MyNamespace.MyClass' or 'MyNamespace.MyClass.MyMethod').")] string fullyQualifiedName,
         [Description("Project name to search in. If omitted, searches all projects.")] string? project = null,
         [Description("Filter members by accessibility: 'public', 'internal', 'protected', 'private'. If omitted, shows all members. Only applies to type details.")] string? memberAccessibility = null,
         [Description("Filter members by kind: 'method', 'property', 'field', 'event', 'constructor'. If omitted, shows all kinds. Only applies to type details.")] string? memberKind = null,
+        [Description("Solution or project file to load (e.g. 'MyApp.sln', 'MyApp.csproj'). If omitted, auto-detected.")] string? solution = null,
         CancellationToken ct = default)
     {
-        var solution = await workspace.GetSolutionAsync(ct);
-        var solutionDir = Path.GetDirectoryName(solution.FilePath) ?? "";
+        workspace.SetServer(server);
+        var sln = await workspace.GetSolutionAsync(solution, ct);
+        var solutionDir = Path.GetDirectoryName(sln.FilePath) ?? "";
 
         var projects = string.IsNullOrEmpty(project)
-            ? solution.Projects
-            : solution.Projects.Where(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
+            ? sln.Projects
+            : sln.Projects.Where(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
 
         // Try to resolve as a type first, then as a member
         foreach (var proj in projects)

@@ -19,17 +19,20 @@ public sealed class GetDocumentSymbolsTool
      Description("Get all symbols defined in a source file — types, methods, properties, fields — with their kind, signature, line number, and nesting. Like the document outline in an IDE. Use this to understand the structure of a file before reading specific sections.")]
     public static async Task<string> GetDocumentSymbols(
         WorkspaceService workspace,
+        McpServer server,
         [Description("File path relative to the solution directory (e.g., 'Services/WorkspaceService.cs').")] string file,
+        [Description("Solution or project file to load (e.g. 'MyApp.sln', 'MyApp.csproj'). If omitted, auto-detected.")] string? solution = null,
         CancellationToken ct = default)
     {
-        var solution = await workspace.GetSolutionAsync(ct);
-        var solutionDir = Path.GetDirectoryName(solution.FilePath) ?? "";
+        workspace.SetServer(server);
+        var sln = await workspace.GetSolutionAsync(solution, ct);
+        var solutionDir = Path.GetDirectoryName(sln.FilePath) ?? "";
         var absolutePath = Path.GetFullPath(Path.Combine(solutionDir, file));
 
         // Find the document
         Document? document = null;
         string? projectName = null;
-        foreach (var proj in solution.Projects)
+        foreach (var proj in sln.Projects)
         {
             document = proj.Documents.FirstOrDefault(d =>
                 string.Equals(d.FilePath, absolutePath, StringComparison.OrdinalIgnoreCase));

@@ -26,20 +26,19 @@ dotnet tool install -g DotSight --prerelease
 
 ## Setup
 
-Add DotSight to your VS Code **user settings** (one-time setup, works for all workspaces):
+Add DotSight to your VS Code **user MCP config** (one-time setup, works for all C# workspaces):
 
-**Settings JSON** (`Ctrl+Shift+P` → "Preferences: Open User Settings (JSON)"):
+`Ctrl+Shift+P` → "MCP: Open User Configuration":
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "dotsight": {
-        "type": "stdio",
-        "command": "dotsight"
-      }
+  "servers": {
+    "dotsight": {
+      "type": "stdio",
+      "command": "dotsight"
     }
   }
+}
 }
 ```
 

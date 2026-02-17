@@ -15,14 +15,17 @@ public sealed class FindSymbolsTool
      Description("Search for symbols (types, methods, properties, etc.) by name pattern across the solution source code and referenced assemblies. Returns matching symbols with their kind, fully qualified name, project, and location.")]
     public static async Task<string> FindSymbols(
         WorkspaceService workspace,
+        McpServer server,
         [Description("Name or pattern to search for. Matched as a case-insensitive substring by default. Set 'useRegex' to true for regex matching (e.g., 'Get.*Async' to find all async getters).")] string pattern,
         [Description("Filter by symbol kind: class, interface, struct, enum, delegate, method, property, field, event, namespace. Leave empty for all kinds.")] string? kind = null,
         [Description("Scope the search to a specific project name. Leave empty to search the entire solution.")] string? project = null,
         [Description("If true, interpret 'pattern' as a .NET regular expression instead of a substring. Default: false.")] bool useRegex = false,
         [Description("If true, also search metadata references (NuGet packages, framework assemblies). Default: false.")] bool includeMetadata = false,
         [Description("Maximum number of results to return. Default: 50.")] int maxResults = 50,
+        [Description("Solution or project file to load (e.g. 'MyApp.sln', 'MyApp.csproj'). If omitted, auto-detected.")] string? solution = null,
         CancellationToken ct = default)
     {
+        workspace.SetServer(server);
         Regex? regex = null;
         if (useRegex)
         {
@@ -35,14 +38,14 @@ public sealed class FindSymbolsTool
                 return $"Invalid regex pattern: {ex.Message}";
             }
         }
-        var solution = await workspace.GetSolutionAsync(ct);
-        var solutionDir = Path.GetDirectoryName(solution.FilePath) ?? "";
+        var sln = await workspace.GetSolutionAsync(solution, ct);
+        var solutionDir = Path.GetDirectoryName(sln.FilePath) ?? "";
         var results = new List<object>();
         var seenSymbols = new HashSet<string>();
 
         var projects = string.IsNullOrEmpty(project)
-            ? solution.Projects
-            : solution.Projects.Where(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
+            ? sln.Projects
+            : sln.Projects.Where(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
 
         foreach (var proj in projects)
         {

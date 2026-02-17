@@ -14,21 +14,24 @@ public sealed class FindImplementationsTool
      Description("Find concrete implementations of an interface, abstract class, or virtual/abstract member. Returns each implementing type or member with its location.")]
     public static async Task<string> FindImplementations(
         WorkspaceService workspace,
+        McpServer server,
         [Description("Fully qualified name of the interface, abstract class, or member (e.g., 'MyNamespace.IMyInterface' or 'MyNamespace.IMyInterface.MyMethod').")] string fullyQualifiedName,
         [Description("Project name where the symbol is defined. If omitted, searches all projects.")] string? project = null,
         [Description("Maximum number of implementations to return. Default: 50.")] int maxResults = 50,
+        [Description("Solution or project file to load (e.g. 'MyApp.sln', 'MyApp.csproj'). If omitted, auto-detected.")] string? solution = null,
         CancellationToken ct = default)
     {
-        var solution = await workspace.GetSolutionAsync(ct);
-        var solutionDir = Path.GetDirectoryName(solution.FilePath) ?? "";
+        workspace.SetServer(server);
+        var sln = await workspace.GetSolutionAsync(solution, ct);
+        var solutionDir = Path.GetDirectoryName(sln.FilePath) ?? "";
 
         // Resolve the symbol
         ISymbol? targetSymbol = null;
         Project? targetProject = null;
 
         var projects = string.IsNullOrEmpty(project)
-            ? solution.Projects
-            : solution.Projects.Where(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
+            ? sln.Projects
+            : sln.Projects.Where(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
 
         foreach (var proj in projects)
         {
@@ -67,31 +70,31 @@ public sealed class FindImplementationsTool
             IEnumerable<INamedTypeSymbol> impls;
 
             if (typeSymbol.TypeKind == TypeKind.Interface)
-                impls = await SymbolFinder.FindImplementationsAsync(typeSymbol, solution, cancellationToken: ct);
+                impls = await SymbolFinder.FindImplementationsAsync(typeSymbol, sln, cancellationToken: ct);
             else
-                impls = await SymbolFinder.FindDerivedClassesAsync(typeSymbol, solution, cancellationToken: ct);
+                impls = await SymbolFinder.FindDerivedClassesAsync(typeSymbol, sln, cancellationToken: ct);
 
             foreach (var impl in impls.Take(maxResults))
             {
-                implementations.Add(FormatImplementation(impl, solutionDir, solution));
+                implementations.Add(FormatImplementation(impl, solutionDir, sln));
             }
         }
         else if (targetSymbol is IMethodSymbol or IPropertySymbol or IEventSymbol)
         {
             // Find overrides of a member
-            var overrides = await SymbolFinder.FindOverridesAsync(targetSymbol, solution, cancellationToken: ct);
+            var overrides = await SymbolFinder.FindOverridesAsync(targetSymbol, sln, cancellationToken: ct);
             foreach (var ov in overrides.Take(maxResults))
             {
-                implementations.Add(FormatImplementation(ov, solutionDir, solution));
+                implementations.Add(FormatImplementation(ov, solutionDir, sln));
             }
 
             // Also find interface implementations
             if (targetSymbol.ContainingType?.TypeKind == TypeKind.Interface)
             {
-                var memberImpls = await SymbolFinder.FindImplementationsAsync(targetSymbol, solution, cancellationToken: ct);
+                var memberImpls = await SymbolFinder.FindImplementationsAsync(targetSymbol, sln, cancellationToken: ct);
                 foreach (var impl in memberImpls.Take(maxResults - implementations.Count))
                 {
-                    implementations.Add(FormatImplementation(impl, solutionDir, solution));
+                    implementations.Add(FormatImplementation(impl, solutionDir, sln));
                 }
             }
         }
@@ -119,7 +122,7 @@ public sealed class FindImplementationsTool
         });
     }
 
-    private static object FormatImplementation(ISymbol symbol, string solutionDir, Solution solution)
+    private static object FormatImplementation(ISymbol symbol, string solutionDir, Solution sln)
     {
         var location = symbol.Locations.FirstOrDefault(l => l.IsInSource) ?? symbol.Locations.FirstOrDefault();
 
@@ -138,9 +141,9 @@ public sealed class FindImplementationsTool
 
             if (location.IsInSource)
             {
-                var documentId = solution.GetDocumentIdsWithFilePath(location.GetLineSpan().Path).FirstOrDefault();
+                var documentId = sln.GetDocumentIdsWithFilePath(location.GetLineSpan().Path).FirstOrDefault();
                 if (documentId is not null)
-                    info["project"] = solution.GetProject(documentId.ProjectId)?.Name;
+                    info["project"] = sln.GetProject(documentId.ProjectId)?.Name;
             }
         }
 

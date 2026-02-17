@@ -14,21 +14,24 @@ public sealed class FindReferencesTool
      Description("Find all references (usages) of a symbol across the solution. Returns each reference location classified as read, write, or declaration.")]
     public static async Task<string> FindReferences(
         WorkspaceService workspace,
+        McpServer server,
         [Description("Fully qualified name of the symbol to find references for (e.g., 'MyNamespace.MyClass' or 'MyNamespace.MyClass.MyMethod').")] string fullyQualifiedName,
         [Description("Project name where the symbol is defined. If omitted, searches all projects.")] string? project = null,
         [Description("Maximum number of reference locations to return. Default: 100.")] int maxResults = 100,
+        [Description("Solution or project file to load (e.g. 'MyApp.sln', 'MyApp.csproj'). If omitted, auto-detected.")] string? solution = null,
         CancellationToken ct = default)
     {
-        var solution = await workspace.GetSolutionAsync(ct);
-        var solutionDir = Path.GetDirectoryName(solution.FilePath) ?? "";
+        workspace.SetServer(server);
+        var sln = await workspace.GetSolutionAsync(solution, ct);
+        var solutionDir = Path.GetDirectoryName(sln.FilePath) ?? "";
 
         // First, resolve the symbol
         ISymbol? targetSymbol = null;
         Project? targetProject = null;
 
         var projects = string.IsNullOrEmpty(project)
-            ? solution.Projects
-            : solution.Projects.Where(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
+            ? sln.Projects
+            : sln.Projects.Where(p => string.Equals(p.Name, project, StringComparison.OrdinalIgnoreCase));
 
         foreach (var proj in projects)
         {
@@ -62,7 +65,7 @@ public sealed class FindReferencesTool
             return $"Symbol '{fullyQualifiedName}' not found. Check the fully qualified name and project scope.";
 
         // Find all references
-        var references = await SymbolFinder.FindReferencesAsync(targetSymbol, solution, ct);
+        var references = await SymbolFinder.FindReferencesAsync(targetSymbol, sln, ct);
         var locations = new List<object>();
 
         foreach (var refGroup in references)
@@ -72,7 +75,7 @@ public sealed class FindReferencesTool
             {
                 if (locations.Count >= maxResults) break;
                 if (!defLocation.IsInSource) continue;
-                locations.Add(FormatReferenceLocation(defLocation, "declaration", solutionDir, solution));
+                locations.Add(FormatReferenceLocation(defLocation, "declaration", solutionDir, sln));
             }
 
             // Add reference locations
@@ -83,7 +86,7 @@ public sealed class FindReferencesTool
                 if (!loc.IsInSource) continue;
 
                 var classification = ClassifyReference(refLocation);
-                locations.Add(FormatReferenceLocation(loc, classification, solutionDir, solution));
+                locations.Add(FormatReferenceLocation(loc, classification, solutionDir, sln));
             }
         }
 
@@ -110,14 +113,14 @@ public sealed class FindReferencesTool
         });
     }
 
-    private static object FormatReferenceLocation(Location location, string classification, string solutionDir, Solution solution)
+    private static object FormatReferenceLocation(Location location, string classification, string solutionDir, Solution sln)
     {
         var span = location.GetLineSpan();
         var filePath = Path.GetRelativePath(solutionDir, span.Path);
 
         // Try to get the containing project
-        var documentId = solution.GetDocumentIdsWithFilePath(span.Path).FirstOrDefault();
-        var projectName = documentId is not null ? solution.GetProject(documentId.ProjectId)?.Name : null;
+        var documentId = sln.GetDocumentIdsWithFilePath(span.Path).FirstOrDefault();
+        var projectName = documentId is not null ? sln.GetProject(documentId.ProjectId)?.Name : null;
 
         return new
         {
