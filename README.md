@@ -21,27 +21,45 @@ All tools are **read-only** — no modifications to source code or projects.
 ## Installation
 
 ```bash
-dotnet tool install -g DotSight
+dotnet tool install -g DotSight --prerelease
 ```
 
-## Usage with VS Code
+## Setup
 
-Add to `.vscode/mcp.json` in your workspace:
+Add DotSight to your VS Code **user settings** (one-time setup, works for all workspaces):
+
+**Settings JSON** (`Ctrl+Shift+P` → "Preferences: Open User Settings (JSON)"):
 
 ```json
 {
-  "servers": {
-    "dotsight": {
-      "type": "stdio",
-      "command": "dotnet",
-      "args": [
-        "tool", "run", "dotsight",
-        "--solution", "${workspaceFolder}/MyApp.sln"
-      ]
+  "mcp": {
+    "servers": {
+      "dotsight": {
+        "type": "stdio",
+        "command": "dotsight"
+      }
     }
   }
 }
 ```
+
+DotSight auto-detects the `.sln` file from the workspace directory. If you have multiple solutions or need to specify one explicitly, use `--solution`:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "dotsight": {
+        "type": "stdio",
+        "command": "dotsight",
+        "args": ["--solution", "${workspaceFolder}/MyApp.sln"]
+      }
+    }
+  }
+}
+```
+
+You can also use a per-workspace `.vscode/mcp.json` if you prefer.
 
 ## Running from source
 

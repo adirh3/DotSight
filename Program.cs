@@ -54,11 +54,19 @@ static string GetSolutionPath(string[] args)
             return Path.GetFullPath(args[i + 1]);
     }
 
-    // Try to find a .sln in the current directory
-    var slnFiles = Directory.GetFiles(Directory.GetCurrentDirectory(), "*.sln");
-    if (slnFiles.Length == 1)
-        return slnFiles[0];
+    // Try to find a .sln in the current directory or parent directories
+    var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+    while (dir is not null)
+    {
+        var slnFiles = dir.GetFiles("*.sln");
+        if (slnFiles.Length == 1)
+            return slnFiles[0].FullName;
+        if (slnFiles.Length > 1)
+            throw new InvalidOperationException(
+                $"Multiple .sln files found in {dir.FullName}. Use --solution <path> to specify which one.");
+        dir = dir.Parent;
+    }
 
     throw new InvalidOperationException(
-        "No solution specified. Use --solution <path> or run from a directory with a single .sln file.");
+        "No solution found. Use --solution <path> or run from a directory containing a .sln file.");
 }
