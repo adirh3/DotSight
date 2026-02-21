@@ -14,7 +14,7 @@ An MCP (Model Context Protocol) server that provides C# solution intelligence to
 | `find_references` | All usages of a symbol across the solution with location info |
 | `find_implementations` | Concrete implementations of interfaces, abstract classes, virtual members |
 | `get_diagnostics` | Compiler errors, warnings, and analyzer diagnostics by scope |
-| `inspect_package` | Explore any NuGet package's public API — types, members, docs — without modifying the project |
+| `inspect_package` | Explore any NuGet package's public API (including already-installed packages) with focused filters for fast type/member lookup |
 
 All tools are **read-only** — no modifications to source code or projects.
 

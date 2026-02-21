@@ -38,7 +38,7 @@ builder.Services
             - get_document_symbols — IDE-style file outline
             - find_references / find_implementations — navigate the code graph
             - get_diagnostics — compiler errors, warnings, and analyzer issues
-            - inspect_package — explore any NuGet package's public API without modifying the project
+                - inspect_package — explore any NuGet package's public API (including already-installed packages) with type/member/query filters for precise lookup
             """;
     })
     .WithStdioServerTransport()
