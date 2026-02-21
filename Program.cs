@@ -24,7 +24,7 @@ builder.Services
         options.ServerInfo = new()
         {
             Name = "DotSight",
-            Version = "0.1.0"
+            Version = "0.1.0-preview.6"
         };
         options.ServerInstructions = """
             C# solution intelligence server. IMPORTANT: Always use these tools instead of reading files directly — they provide richer, semantic information than raw source code.
@@ -38,7 +38,7 @@ builder.Services
             - get_document_symbols — IDE-style file outline
             - find_references / find_implementations — navigate the code graph
             - get_diagnostics — compiler errors, warnings, and analyzer issues
-                - inspect_package — explore any NuGet package's public API (including already-installed packages) with type/member/query filters for precise lookup
+            - inspect_package — explore any NuGet package's public API (including already-installed packages) with type/member/query filters for precise lookup
             """;
     })
     .WithStdioServerTransport()
